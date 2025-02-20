@@ -9,10 +9,12 @@ from streamlit_image_zoom import image_zoom
 BUCKET_NAME = "data-reference-1"
 IMAGE_PREFIX = "images/"
 MASK_PREFIX = "masks/"
-CSV_PREFIX = "CSVs/"
+CSV_PREFIX = "csvs/"
 
-# Initialize S3 Client
+# # Initialize S3 Client
 s3 = boto3.client("s3")
+
+
 
 # Set page title
 st.set_page_config(page_title='Defect Inspection', layout='wide', initial_sidebar_state='collapsed')
@@ -55,7 +57,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- UI Layout ---
-st.markdown('<div class="section">', unsafe_allow_html=True)
+# --- UI Layout ---
+st.markdown("###  ", unsafe_allow_html=True)
+#st.markdown('<div class="section">', unsafe_allow_html=True)
 st.markdown("### Porosity Defect Inspection", unsafe_allow_html=True)
 st.markdown('<div class="section">', unsafe_allow_html=True)
 
