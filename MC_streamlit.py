@@ -13,9 +13,6 @@ DYNAMODB_TABLE = "data_logs"
 # Initialize AWS Clients
 s3 = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
-
-dynamodb = boto3.resource("dynamodb",aws_access_key_id=AWS_ACCESS_KEY_ID,
-aws_secret_access_key=AWS_SECRET_ACCESS_KEY,region_name=AWS_REGION)
 table = dynamodb.Table(DYNAMODB_TABLE)
 
 def fetch_s3_file(s3_url):
