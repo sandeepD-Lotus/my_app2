@@ -5,21 +5,37 @@ from io import BytesIO
 from PIL import Image
 from streamlit_image_zoom import image_zoom
 
-# AWS S3 Configuration
-BUCKET_NAME = "data-reference-1"
-IMAGE_PREFIX = "images/"
-MASK_PREFIX = "masks/"
-CSV_PREFIX = "csvs/"
 
-# # Initialize S3 Client
+# AWS Configuration
+BUCKET_NAME = "inference-1"
+DYNAMODB_TABLE = "data_logs"
+
+
+# Initialize AWS Clients
 s3 = boto3.client("s3")
+dynamodb = boto3.resource("dynamodb")
 
+dynamodb = boto3.resource("dynamodb",aws_access_key_id=AWS_ACCESS_KEY_ID,
+aws_secret_access_key=AWS_SECRET_ACCESS_KEY,region_name=AWS_REGION)
+table = dynamodb.Table(DYNAMODB_TABLE)
+
+def fetch_s3_file(s3_url):
+    try:
+        bucket, key = s3_url.replace("s3://", "").split("/", 1)
+        response = s3.get_object(Bucket=bucket, Key=key)
+        return response['Body'].read()
+    except Exception:
+        return None
+
+def query_dynamodb(block_id):
+    table = dynamodb.Table(DYNAMODB_TABLE)
+    response = table.scan(FilterExpression=boto3.dynamodb.conditions.Attr('block_id').eq(block_id))
+    return response.get("Items", [])
 
 
 # Set page title
 st.set_page_config(page_title='Defect Inspection', layout='wide', initial_sidebar_state='collapsed')
 
-# --- Custom CSS ---
 st.markdown("""
     <style>
         body {
@@ -28,7 +44,7 @@ st.markdown("""
         }
         .block-container {
             border-bottom: 2px solid #ccc;
-            padding: 1px;
+            padding: 50px;
             background-color: black !important;
             color: white !important;
         }
@@ -56,13 +72,10 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- UI Layout ---
-# --- UI Layout ---
-st.markdown("###  ", unsafe_allow_html=True)
+
 #st.markdown('<div class="section">', unsafe_allow_html=True)
 st.markdown("### Porosity Defect Inspection", unsafe_allow_html=True)
 st.markdown('<div class="section">', unsafe_allow_html=True)
-
 col1, col2, col3 = st.columns([3, 1, 1])
 
 if "block_number" not in st.session_state:
@@ -80,58 +93,57 @@ if search and block_number:
 
 block_number = st.session_state.block_number
 
-# Function to fetch files from S3
-def fetch_s3_file(bucket, key):
-    try:
-        response = s3.get_object(Bucket=bucket, Key=key)
-        return response['Body'].read()
-    except Exception:
-        return None
-
 if block_number:
-    image_key = f"{IMAGE_PREFIX}{block_number}-localized.png"
-    mask_key = f"{MASK_PREFIX}{block_number}-mask.png"
-    csv_key = f"{CSV_PREFIX}{block_number}-report.csv"
-
-    # Fetch CSV Report
-    csv_data = fetch_s3_file(BUCKET_NAME, csv_key)
-    if csv_data:
-        df = pd.read_csv(BytesIO(csv_data))
-        status_col.markdown("### 🔴 FAIL" if not df.empty else "### 🟢 PASS", unsafe_allow_html=True)
+    items = query_dynamodb(block_number)
+    if not items:
+        st.warning("No data found for the given Block ID.")
     else:
-        status_col.markdown("### 🟢 PASS", unsafe_allow_html=True)
-
-    col4, col5 = st.columns([0.6, 0.8])
-    
-    with col4:
-        st.markdown('<div class="section">', unsafe_allow_html=True)
-        st.markdown("### Defect Visualization", unsafe_allow_html=True)
-        show_mask = st.toggle("Show Mask Overlay", key="mask_toggle")
+        item = items[0]  # Assuming one entry per block_id
+        image_url = item.get("image_url_location", "")
+        mask_url = item.get("mask_url_location", "")
+        localized_url = item.get("localized_url_location", "")
+        report_url = item.get("report_url_location", "")
         
-        try:
-            # Fetch Base Image
-            image_data = fetch_s3_file(BUCKET_NAME, image_key)
-            base_image = Image.open(BytesIO(image_data)).convert("RGBA") if image_data else None
-
-            if not base_image:
-                st.warning("Localized image not found.")
-            
-            # Fetch Mask Image
-            mask_data = fetch_s3_file(BUCKET_NAME, mask_key)
-            if show_mask and base_image and mask_data:
-                mask_image = Image.open(BytesIO(mask_data)).convert("RGBA")
-                mask_image = mask_image.resize(base_image.size)
-                blended_image = Image.blend(base_image, mask_image, alpha=0.6)
-                image_zoom(blended_image, mode="scroll", size=(700, 500), keep_aspect_ratio=True, zoom_factor=8.0, increment=0.8)
-            elif base_image:
-                image_zoom(base_image, mode="scroll", size=(700, 500), keep_aspect_ratio=True, zoom_factor=8.0, increment=0.8)
-        except Exception as e:
-            st.error(f"Error loading images: {e}")
-    
-    with col5:
-        st.markdown('<div class="section">', unsafe_allow_html=True)
-        st.markdown("### Defect Report", unsafe_allow_html=True)
+        csv_data = fetch_s3_file(report_url) if report_url else None
         if csv_data:
-            st.table(pd.read_csv(BytesIO(csv_data)))
+            df = pd.read_csv(BytesIO(csv_data))
+            status_col.markdown("### 🔴 FAIL" if not df.empty else "### 🟢 PASS", unsafe_allow_html=True)
+            st.markdown('<div class="section">', unsafe_allow_html=True)
         else:
-            st.info("No defect report found.")
+            status_col.markdown("### 🟢 PASS", unsafe_allow_html=True)
+            st.markdown('<div class="section">', unsafe_allow_html=True)
+
+        col4, col5 = st.columns([0.6, 0.7])
+        with col4:
+            #st.markdown('<div class="section">', unsafe_allow_html=True)
+            st.markdown("### Defect Visualization", unsafe_allow_html=True)
+            #st.markdown('<div class="section">', unsafe_allow_html=True)
+            show_mask = st.toggle("Show Mask Overlay", key="mask_toggle")
+            try:
+                image_data = fetch_s3_file(localized_url) if localized_url else None
+                base_image = Image.open(BytesIO(image_data)).convert("RGBA") if image_data else None
+                if base_image:
+                    mask_data = fetch_s3_file(mask_url) if mask_url and show_mask else None
+                    if mask_data:
+                        mask_image = Image.open(BytesIO(mask_data)).convert("RGBA")
+                        mask_image = mask_image.resize(base_image.size)
+                        blended_image = Image.blend(base_image, mask_image, alpha=0.6)
+                        image_zoom(blended_image, mode="scroll", size=(700, 500), keep_aspect_ratio=True, zoom_factor=8.0, increment=0.8)
+                        # Display
+                        st.image(resized_image, channels="BGR", use_column_width=True)
+                        
+                    else:
+                        image_zoom(base_image, mode="scroll", size=(700, 500), keep_aspect_ratio=True, zoom_factor=8.0, increment=0.8)
+                else:
+                    st.warning("Localized image not found.")
+            except Exception as e:
+                st.error(f"Error loading images: {e}")
+        
+        with col5:
+            #st.markdown('<div class="section">', unsafe_allow_html=True)
+            st.markdown("### Defect Report", unsafe_allow_html=True)
+            #st.markdown('<div class="section">', unsafe_allow_html=True)
+            if csv_data:
+                st.table(pd.read_csv(BytesIO(csv_data)))
+            else:
+                st.info("No defect report found.")
