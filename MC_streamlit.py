@@ -109,7 +109,7 @@ if block_number:
             status_col.markdown("### 🟢 PASS", unsafe_allow_html=True)
             st.markdown('<div class="section">', unsafe_allow_html=True)
 
-        col4, col5 = st.columns([0.6, 0.7])
+        col4, col5 = st.columns([0.4, 0.4])
         with col4:
             #st.markdown('<div class="section">', unsafe_allow_html=True)
             st.markdown("### Defect Visualization", unsafe_allow_html=True)
