@@ -125,8 +125,6 @@ if block_number:
                         mask_image = mask_image.resize(base_image.size)
                         blended_image = Image.blend(base_image, mask_image, alpha=0.6)
                         image_zoom(blended_image, mode="scroll", size=(700, 500), keep_aspect_ratio=True, zoom_factor=8.0, increment=0.8)
-                        # Display
-                        st.image(resized_image, channels="BGR", use_column_width=True)
                         
                     else:
                         image_zoom(base_image, mode="scroll", size=(700, 500), keep_aspect_ratio=True, zoom_factor=8.0, increment=0.8)
